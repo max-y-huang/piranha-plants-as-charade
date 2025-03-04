@@ -1,4 +1,4 @@
-from __future__ import annotations  # avoid circular dependency
+from __future__ import annotations
 
 import os
 import librosa
@@ -6,16 +6,21 @@ import tempfile
 import numpy as np
 import scipy.io.wavfile as wav  # type: ignore
 from dataclasses import dataclass
-from typing import Tuple, Dict, List, Type, DefaultDict
-from numpy.typing import NDArray
+from typing import Tuple, Dict, List, Type
 from midiutil.MidiFile import MIDIFile  # type: ignore
-from collections import defaultdict
 
-import generation.instruments.base as instrument  # standard import to avoid circular dependency
+from common.conversions import db_to_strength
+from common.audio_data import AudioData
+
+import generation.instruments.base as instrument
 
 
 @dataclass(frozen=True)
 class RollExportConfig:
+    """
+    TODO
+    """
+
     output_path: str
     sample_rate: int = 44100
     start_padding: float = 0.5  # in seconds
@@ -23,9 +28,11 @@ class RollExportConfig:
         "https://github.com/musescore/MuseScore/raw/refs/heads/master/share/sound/MS%20Basic.sf3"
     )
     soundfont_path: str = "../data/soundfonts/ms_basic.sf3"
+    midi_db: float = 11
+    sample_db: float = 0
 
     @property
-    def num_start_padding_samples(self) -> int:
+    def start_padding_size(self) -> int:
         return int(self.start_padding * self.sample_rate)
 
 
@@ -88,7 +95,7 @@ class Roll:
         return self.get_instrument(name)
 
     def export(self, config: RollExportConfig):
-        midi_data, sample_data = self._get_instrument_export_data(config)
+        midi_instruments, sampled_instruments = self._get_instruments_by_type()
 
         # Download soundfont if missing.
         if not os.path.exists(config.soundfont_path):
@@ -99,7 +106,15 @@ class Roll:
         midi_file = tempfile.NamedTemporaryFile(suffix=".mid")
         midi_wav_file = tempfile.NamedTemporaryFile(suffix=".wav")
 
-        # Write MIDI file.
+        # Create MIDI data.
+        midi_data = MIDIFile(
+            numTracks=len(midi_instruments),
+            ticks_per_quarternote=self.quantization,
+        )
+        for track, ins in enumerate(midi_instruments):
+            ins.add_self_to_midi_track(midi_data, track)
+
+        # Write MIDI data to MIDI file.
         with open(midi_file.name, "wb") as fout:
             midi_data.writeFile(fout)  # type: ignore
 
@@ -108,46 +123,41 @@ class Roll:
         os.system(
             f"fluidsynth -ni {config.soundfont_path} {midi_file.name} -F {midi_wav_file.name} -r {config.sample_rate}"
         )
-        output: NDArray[np.float32] = librosa.load(  # type: ignore
-            midi_wav_file.name,
-            sr=config.sample_rate,
-            dtype=np.float32,
-        )[0]
+        output = AudioData(
+            librosa.load(  # type: ignore
+                midi_wav_file.name,
+                sr=config.sample_rate,
+                dtype=np.float32,
+            )[0]
+            * db_to_strength(config.midi_db)
+        )
+        output.pad_start(config.start_padding_size)
 
-        # Add sample WAV data onto MIDI WAV data.
-        output = np.insert(output, 0, np.zeros(config.num_start_padding_samples))
+        # Get WAV data from sampled instruments.
+        sample_data = [
+            ins.generate_audio_from_samples(config) for ins in sampled_instruments
+        ]
+
+        # Add sampled instruments' WAV datas onto MIDI WAV data.
         for sample in sample_data:
-            # FIXME: This code caps the output to the MIDI duration. It should instead be the
-            # max between the MIDI and sample durations.
-            for i in range(min(len(output), len(sample))):
-                output[i] += sample[i]
+            array = sample.array
+            output.add_range((0, len(array)), array * db_to_strength(config.sample_db))
 
         # Export combined WAV data and close temporary files.
-        wav.write(config.output_path, config.sample_rate, output)  # type: ignore
+        wav.write(config.output_path, config.sample_rate, output.array)  # type: ignore
         midi_wav_file.close()
         midi_file.close()
 
-    def _get_instrument_export_data(
-        self,
-        config: RollExportConfig,
-    ) -> Tuple[MIDIFile, List[NDArray[np.float32]]]:
-        ins_lists: DefaultDict[
-            Type[instrument.InstrumentExportData],
-            List[instrument.Instrument],
-        ] = defaultdict(lambda: list())
+    def _get_instruments_by_type(self) -> Tuple[
+        List[instrument.MIDIInstrument],
+        List[instrument.SampledInstrument],
+    ]:
+        midi_instruments: List[instrument.MIDIInstrument] = list()
+        sampled_instruments: List[instrument.SampledInstrument] = list()
         for ins in self.list_instruments():
-            ins_lists[type(ins.export_data)].append(ins)
+            if issubclass(ins.__class__, instrument.MIDIInstrument):
+                midi_instruments.append(ins)  # type: ignore
+            elif issubclass(ins.__class__, instrument.SampledInstrument):
+                sampled_instruments.append(ins)  # type: ignore
 
-        midi_data = MIDIFile(
-            numTracks=len(ins_lists[instrument.MIDIInstrumentExportData]),
-            ticks_per_quarternote=self.quantization,
-        )
-        for track, ins in enumerate(ins_lists[instrument.MIDIInstrumentExportData]):
-            ins.add_self_to_midi_track(midi_data, track)
-
-        sample_data = [
-            ins.generate_audio_from_samples(config)
-            for ins in ins_lists[instrument.SampleInstrumentExportData]
-        ]
-
-        return (midi_data, sample_data)
+        return (midi_instruments, sampled_instruments)

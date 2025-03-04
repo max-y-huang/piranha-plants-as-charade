@@ -1,1 +1,3 @@
 start_shift=-1500
+ease_in_factor=0.02
+db=3

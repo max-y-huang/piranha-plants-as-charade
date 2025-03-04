@@ -3,20 +3,19 @@ from common.note_collection import NoteCollection
 
 from generation.chord_progression import ChordProgression
 from generation.instruments.base import (
-    Instrument,
-    InstrumentExportData,
-    SampleInstrumentExportData,
+    SampledInstrument,
+    SampledInstrumentExportConfig,
 )
 
 
-class Voice(Instrument):
+class Voice(SampledInstrument):
 
     def __init__(self, parent: Roll, name: str):
         super().__init__(parent, name)
 
     @property
-    def export_data(self) -> InstrumentExportData:
-        return SampleInstrumentExportData(
+    def export_config(self) -> SampledInstrumentExportConfig:
+        return SampledInstrumentExportConfig(
             sample_src="piranha_plant",
         )
 
