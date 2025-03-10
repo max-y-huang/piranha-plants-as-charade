@@ -10,20 +10,27 @@ from common import db_to_strength
 
 class AudioData:
 
-    def __init__(self, init_data: NDArray[np.float32] = np.array([])):
+    def __init__(
+        self,
+        init_data: NDArray[np.float32] = np.array([]),
+        sample_rate: float = 44100,
+    ):
         self._data: DefaultDict[int, np.float32] = defaultdict(lambda: np.float32(0))
+        self._sample_rate: float = sample_rate
         self.set_range((0, len(init_data)), init_data)
 
     @classmethod
-    def from_file(cls, file_name: str, sample_rate: float, db: float = 0):
-        return cls(
-            librosa.load(  # type: ignore
-                file_name,
-                sr=sample_rate,
-                dtype=np.float32,
-            )[0]
-            * db_to_strength(db)
+    def from_file(cls, file_name: str, sample_rate: (float | None) = None, db: float = 0):
+        signal: NDArray[np.float32]
+
+        signal, sr = librosa.load(  # type: ignore
+            file_name,
+            sr=sample_rate,
+            dtype=np.float32,
         )
+
+        signal *= db_to_strength(db)
+        return cls(signal, sr)
 
     @cached_property
     def array(self) -> NDArray[np.float32]:
@@ -31,6 +38,10 @@ class AudioData:
         if len(keys) == 0:
             return np.array([])
         return np.array([self._data[i] for i in range(max(keys) + 1)])
+
+    @property
+    def sample_rate(self) -> float:
+        return self._sample_rate
 
     def slice(self, start: int, end: int) -> "AudioData":
         return AudioData(self.array[start:end])

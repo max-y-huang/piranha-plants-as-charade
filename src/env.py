@@ -4,7 +4,7 @@ from typing import Dict, Type, Any
 from dotenv import dotenv_values
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Env:
     BE_AUTH_TOKEN: str
     FE_BASE_URL: str
