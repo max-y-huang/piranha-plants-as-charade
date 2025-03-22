@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from midiutil.MidiFile import MIDIFile  # type: ignore
 
+from common.util import db_to_strength
 from common.note_collection import NoteCollection
 from common.audio_data import AudioData
 from common.audio_sample import (
@@ -109,8 +110,8 @@ class SampledPart(Part):
         sample_manager = AUDIO_SAMPLE_LIBRARY[self._instrument.export_config.name]
 
         audio_data = AudioData()
-        for note in self.notes.list():
-            timbre = sample_manager.get_random_timbre()
+        for i, note in enumerate(self.notes.list()):
+            timbre = sample_manager.get_random_timbre(i)
             sample = sample_manager.get_sample(timbre, note.pitch)
             note_len = min(len(sample.audio.array), to_sample_time(note.duration))
             start_time = to_sample_time(note.start) + get_shift_size(sample)
@@ -119,6 +120,7 @@ class SampledPart(Part):
             audio_data.add_range(
                 note_range,
                 sample.audio.slice(0, note_len).array
+                * db_to_strength(self._instrument.export_config.db)
                 * sample.timbre_properties.get_envelope(note_len),
             )
 

@@ -11,7 +11,8 @@ from melody_extraction.signal import SignalMelodyExtractor
 
 from generation.chord_progression import ChordProgression
 from generation.viterbi import ViterbiChordProgressionGenerator
-from instruments.voice import Voice
+from instruments.voice_melody import VoiceMelody
+from instruments.voice_harmony import VoiceHarmony
 from instruments.piano import Piano
 from instruments.bass_drum import BassDrum
 from instruments.snare_drum import SnareDrum
@@ -69,7 +70,8 @@ def generate_arrangement(
         chord_progression,
         arrangement_metadata,
     )
-    arrangement_generator.add_instrument("Voice 1", Voice)
+    arrangement_generator.add_instrument("Voice 1", VoiceMelody)
+    arrangement_generator.add_instrument("Voice 2", VoiceHarmony)
     arrangement_generator.add_instrument("Piano", Piano)
     arrangement_generator.add_instrument("Bass Drum", BassDrum)
     arrangement_generator.add_instrument("Snare Drum", SnareDrum)

@@ -67,6 +67,7 @@ class MIDIInstrument(Instrument):
 @dataclass(frozen=True)
 class SampledInstrumentExportConfig(InstrumentExportConfig):
     name: str
+    db: float = 0
 
 
 class SampledInstrument(Instrument):

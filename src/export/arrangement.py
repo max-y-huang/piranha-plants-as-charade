@@ -57,7 +57,7 @@ class ArrangementExportConfig:
     )
     soundfont_path: str = "../data/soundfonts/ms_basic.sf3"
     midi_db: float = 11
-    sample_db: float = 0
+    sample_db: float = -3
 
     @property
     def start_padding_size(self) -> int:
